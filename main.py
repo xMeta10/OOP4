@@ -504,3 +504,61 @@ class CanvasWidget(QWidget):
 
         self._controller.resize_selected(dw, dh, self.rect())
 
+class MainWindow(QMainWindow):
+
+    def __init__(self, storage):
+        super().__init__()
+
+        self._storage = storage
+        self._controller = EditorController(storage)
+
+        self.setWindowTitle(WINDOW_TITLE)
+        self.resize(WINDOW_WIDTH, WINDOW_HEIGHT)
+        self.setMinimumSize(WINDOW_MIN_SIZE)
+
+        self._status = QStatusBar(self)
+        self.setStatusBar(self._status)
+
+        self._canvas = CanvasWidget(storage, self._controller, self)
+        self.setCentralWidget(self._canvas)
+
+        self._build_toolbar()
+
+        self._status.showMessage(STATUS_READY)
+
+    def _build_toolbar(self):
+
+        toolbar = QToolBar("Инструменты")
+        self.addToolBar(toolbar)
+
+        self._add_action(toolbar, "Прямоугольник", ShapeFactory.RECTANGLE)
+        self._add_action(toolbar, "Квадрат", ShapeFactory.SQUARE)
+        self._add_action(toolbar, "Эллипс", ShapeFactory.ELLIPSE)
+        self._add_action(toolbar, "Круг", ShapeFactory.CIRCLE)
+        self._add_action(toolbar, "Треугольник", ShapeFactory.TRIANGLE)
+
+    def _add_action(self, parent, title, shape_type):
+
+        action = QAction(title, self)
+
+        def callback():
+            self._canvas.set_current_tool(shape_type)
+
+        action.triggered.connect(callback)
+
+        parent.addAction(action)
+
+def main():
+
+    app = QApplication(sys.argv)
+
+    storage = ShapeStorage()
+
+    window = MainWindow(storage)
+    window.show()
+
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()
