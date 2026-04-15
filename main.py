@@ -135,4 +135,177 @@ class BaseShape(ABC):
     def _draw_shape(self, painter):
         pass
 
+class RectangleShape(BaseShape):
+
+    def contains_point(self, point):
+        return self._rect.contains(point)
+
+    def _draw_shape(self, painter):
+        painter.drawRect(self._rect)
+
+
+class SquareShape(RectangleShape):
+
+    def _build_resized_rect(self, dw, dh):
+
+        delta = dw if abs(dw) > abs(dh) else dh
+        new_size = self._rect.width() + delta
+
+        center = self._rect.center()
+
+        rect = QRect(0, 0, new_size, new_size)
+        rect.moveCenter(center)
+
+        return rect
+
+
+class EllipseShape(BaseShape):
+
+    def contains_point(self, point):
+
+        rx = self._rect.width() / 2
+        ry = self._rect.height() / 2
+
+        cx = self._rect.center().x()
+        cy = self._rect.center().y()
+
+        dx = point.x() - cx
+        dy = point.y() - cy
+
+        return (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry) <= 1
+
+    def _draw_shape(self, painter):
+        painter.drawEllipse(self._rect)
+
+
+class CircleShape(EllipseShape):
+
+    def _build_resized_rect(self, dw, dh):
+
+        delta = dw if abs(dw) > abs(dh) else dh
+        new_size = self._rect.width() + delta
+
+        center = self._rect.center()
+
+        rect = QRect(0, 0, new_size, new_size)
+        rect.moveCenter(center)
+
+        return rect
+
+
+class TriangleShape(BaseShape):
+
+    def _polygon(self):
+
+        top = QPointF(self._rect.center().x(), self._rect.top())
+        left = QPointF(self._rect.left(), self._rect.bottom())
+        right = QPointF(self._rect.right(), self._rect.bottom())
+
+        return QPolygonF([top, left, right])
+
+    def contains_point(self, point):
+
+        path = QPainterPath()
+        path.addPolygon(self._polygon())
+
+        return path.contains(QPointF(point))
+
+    def _draw_shape(self, painter):
+        painter.drawPolygon(self._polygon())
+
+class ShapeFactory:
+
+    RECTANGLE = "rectangle"
+    SQUARE = "square"
+    ELLIPSE = "ellipse"
+    CIRCLE = "circle"
+    TRIANGLE = "triangle"
+
+    TITLES = {
+        RECTANGLE: "Прямоугольник",
+        SQUARE: "Квадрат",
+        ELLIPSE: "Эллипс",
+        CIRCLE: "Круг",
+        TRIANGLE: "Треугольник",
+    }
+
+    @classmethod
+    def create(cls, shape_type, point):
+
+        if shape_type == cls.RECTANGLE:
+            return RectangleShape(
+                QRect(point.x(), point.y(), DEFAULT_SHAPE_WIDTH, DEFAULT_SHAPE_HEIGHT)
+            )
+
+        if shape_type == cls.SQUARE:
+            return SquareShape(
+                QRect(point.x(), point.y(), DEFAULT_SHAPE_WIDTH, DEFAULT_SHAPE_WIDTH)
+            )
+
+        if shape_type == cls.ELLIPSE:
+            return EllipseShape(
+                QRect(point.x(), point.y(), DEFAULT_SHAPE_WIDTH, DEFAULT_SHAPE_HEIGHT)
+            )
+
+        if shape_type == cls.CIRCLE:
+            return CircleShape(
+                QRect(point.x(), point.y(), DEFAULT_SHAPE_WIDTH, DEFAULT_SHAPE_WIDTH)
+            )
+
+        if shape_type == cls.TRIANGLE:
+            return TriangleShape(
+                QRect(point.x(), point.y(), DEFAULT_SHAPE_WIDTH, DEFAULT_SHAPE_HEIGHT)
+            )
+
+    @classmethod
+    def get_title(cls, shape_type):
+        return cls.TITLES[shape_type]
+
+class ShapeStorage:
+
+    def __init__(self):
+        self._items = []
+
+    def add(self, shape):
+        self._items.append(shape)
+
+    def __iter__(self):
+        return iter(self._items)
+
+    def __len__(self):
+        return len(self._items)
+
+    def clear_selection(self):
+
+        for s in self._items:
+            s.deselect()
+
+    def selected_shapes(self):
+
+        return [s for s in self._items if s.is_selected()]
+
+    def remove_selected(self):
+
+        before = len(self._items)
+        self._items = [s for s in self._items if not s.is_selected()]
+        return before - len(self._items)
+
+    def get_shapes_at_point(self, point):
+
+        result = []
+
+        for s in reversed(self._items):
+            if s.contains_point(point):
+                result.append(s)
+
+        return result
+
+    def bring_to_front(self, target):
+
+        if target not in self._items:
+            return
+
+        self._items.remove(target)
+        self._items.append(target)
+
 
