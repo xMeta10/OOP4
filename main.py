@@ -308,4 +308,199 @@ class ShapeStorage:
         self._items.remove(target)
         self._items.append(target)
 
+class EditorController:
+
+    def __init__(self, storage):
+        self._storage = storage
+
+    def add_shape(self, shape_type, point, canvas_rect):
+
+        shape = ShapeFactory.create(shape_type, point)
+
+        if not shape.ensure_inside(canvas_rect):
+            return None
+
+        self._storage.add(shape)
+        self._storage.bring_to_front(shape)
+
+        return shape
+
+    def handle_click_selection(self, point, ctrl_pressed):
+
+        shapes = self._storage.get_shapes_at_point(point)
+
+        if not shapes:
+
+            if not ctrl_pressed:
+                self._storage.clear_selection()
+
+            return None
+
+        top = shapes[0]
+
+        if ctrl_pressed:
+            top.toggle_selection()
+        else:
+            self._storage.clear_selection()
+            top.select()
+
+        self._storage.bring_to_front(top)
+
+        return top
+
+    def delete_selected(self):
+        return self._storage.remove_selected()
+
+    def move_selected(self, dx, dy, canvas_rect):
+
+        moved = 0
+
+        for s in self._storage.selected_shapes():
+            if s.move_by(dx, dy, canvas_rect):
+                moved += 1
+
+        return moved
+
+    def resize_selected(self, dw, dh, canvas_rect):
+
+        resized = 0
+
+        for s in self._storage.selected_shapes():
+            if s.resize_by(dw, dh, canvas_rect):
+                resized += 1
+
+        return resized
+
+    def recolor_selected(self, color):
+
+        count = 0
+
+        for s in self._storage.selected_shapes():
+            s.set_fill_color(color)
+            count += 1
+
+        return count
+
+    def get_shape_title(self, shape_type):
+        return ShapeFactory.get_title(shape_type)
+
+class CanvasWidget(QWidget):
+
+    status_message_changed = pyqtSignal(str)
+
+    def __init__(self, storage, controller, parent=None):
+        super().__init__(parent)
+
+        self._storage = storage
+        self._controller = controller
+        self._current_tool = ShapeFactory.RECTANGLE
+
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+
+        palette = self.palette()
+        palette.setColor(self.backgroundRole(), CANVAS_BACKGROUND_COLOR)
+        self.setPalette(palette)
+        self.setAutoFillBackground(True)
+
+    def set_current_tool(self, tool):
+        self._current_tool = tool
+
+    def tool_label(self):
+        return self._controller.get_shape_title(self._current_tool)
+
+    def paintEvent(self, event):
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        for shape in self._storage:
+            shape.draw(painter)
+
+    def mousePressEvent(self, event: QMouseEvent):
+
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
+
+        point = event.position().toPoint()
+
+        ctrl = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
+
+        selected = self._controller.handle_click_selection(point, ctrl)
+
+        if selected is None:
+
+            shape = self._controller.add_shape(
+                self._current_tool,
+                point,
+                self.rect(),
+            )
+
+            if shape:
+                self._storage.clear_selection()
+                shape.select()
+
+        self.update()
+
+    def keyPressEvent(self, event: QKeyEvent):
+
+        key = event.key()
+        shift = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+        ctrl = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
+
+        if key == Qt.Key.Key_Delete:
+
+            self._controller.delete_selected()
+            self.update()
+            return
+
+        if ctrl and shift and key == Qt.Key.Key_C:
+
+            color = QColorDialog.getColor(parent=self)
+
+            if color.isValid():
+                self._controller.recolor_selected(color)
+
+            self.update()
+            return
+
+        if key in (Qt.Key.Key_Left, Qt.Key.Key_Right, Qt.Key.Key_Up, Qt.Key.Key_Down):
+
+            if shift:
+                self._resize_key(key)
+            else:
+                self._move_key(key)
+
+            self.update()
+
+    def _move_key(self, key):
+
+        dx = 0
+        dy = 0
+
+        if key == Qt.Key.Key_Left:
+            dx = -MOVE_STEP
+        elif key == Qt.Key.Key_Right:
+            dx = MOVE_STEP
+        elif key == Qt.Key.Key_Up:
+            dy = -MOVE_STEP
+        elif key == Qt.Key.Key_Down:
+            dy = MOVE_STEP
+
+        self._controller.move_selected(dx, dy, self.rect())
+
+    def _resize_key(self, key):
+
+        dw = 0
+        dh = 0
+
+        if key == Qt.Key.Key_Left:
+            dw = -RESIZE_STEP
+        elif key == Qt.Key.Key_Right:
+            dw = RESIZE_STEP
+        elif key == Qt.Key.Key_Up:
+            dh = -RESIZE_STEP
+        elif key == Qt.Key.Key_Down:
+            dh = RESIZE_STEP
+
+        self._controller.resize_selected(dw, dh, self.rect())
 
